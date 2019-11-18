@@ -3,7 +3,11 @@ import networkx as nx
 from itertools import zip_longest
 from nose.tools import assert_true, assert_equal
 from . import schema_adapted as adapted
+<<<<<<< HEAD
 from .schema_adapted import graph
+=======
+from .schema_adapted import graph, file2graph
+>>>>>>> master
 
 
 def test_adapted_type():
@@ -18,7 +22,26 @@ def test_adapted_type():
         assert_true(0 == len(nx.symmetric_difference(g1, g2).edges))
     c.delete()
     dj.errors._switch_adapted_types(False)
+<<<<<<< HEAD
+=======
 
+>>>>>>> master
+
+def test_adapted_filepath_type():
+    # https://github.com/datajoint/datajoint-python/issues/684
+    dj.errors._switch_adapted_types(True)
+    dj.errors._switch_filepath_types(True)
+    c = adapted.Position()
+    Position.insert([{'pos_id': 0, 'seed_root': 3}])
+    result = (Position & 'pos_id=0').fetch1('seed_root')
+
+    assert_true(isinstance(result, dict))
+    assert_equal(0.3761992090175474, result[1][0])
+    assert_true(6 == len(result))
+
+    c.delete()
+    dj.errors._switch_filepath_types(False)
+    dj.errors._switch_adapted_types(False)
 
 # test spawned classes
 local_schema = dj.schema(adapted.schema_name)

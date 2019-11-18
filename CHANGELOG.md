@@ -1,6 +1,17 @@
 ## Release notes
 
+<<<<<<< HEAD
 ### 0.12.0 -- October 1, 2019
+=======
+### 0.12.2 -- Nov 11, 2019
+* Bugfix - Convoluted error thrown if there is a reference to a non-existent table attribute (#691)
+* Bugfix - Insert into external does not trim leading slash if defined in `dj.config['stores']['<store>']['location']` (#692)
+
+### 0.12.1 -- Nov 2, 2019
+* Bugfix - AttributeAdapter converts into a string (#684)
+
+### 0.12.0 -- Oct 31, 2019
+>>>>>>> master
 * Dropped support for Python 3.4
 * Support secure connections with TLS (aka SSL) PR #620
 * Convert numpy array from python object to appropriate data type if all elements are of the same type (#587) PR #608
@@ -20,6 +31,12 @@
 * Accept alias for supported MySQL datatypes (#544) PR #545
 * Support for pandas in `fetch` (#459, #537) PR #534
 * Support for ordering by "KEY" in `fetch` (#541) PR #534
+<<<<<<< HEAD
+=======
+* Add config to enable python native blobs PR #672, #676
+* Add secure option for external storage (#663) PR #674, #676
+* Add blob migration utility from DJ011 to DJ012 PR #673
+>>>>>>> master
 * Improved external storage - a migration script needed from version 0.11  (#467, #475, #480, #497) PR #532
 * Increase default display rows (#523) PR #526
 * Bugfixes (#521, #205, #279, #477, #570, #581, #597, #596, #618, #633, #643, #644, #647, #648, #650, #656)
@@ -28,7 +45,7 @@
 ### 0.11.3 -- Jul 26, 2019
 * Fix incompatibility with pyparsing 2.4.1 (#629) PR #631
 
-### 0.11.2 -- July 25, 2019
+### 0.11.2 -- Jul 25, 2019
 * Fix #628 - incompatibility with pyparsing 2.4.1
 
 ### 0.11.1 -- Nov 15, 2018

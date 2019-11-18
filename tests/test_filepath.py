@@ -41,6 +41,38 @@ def test_path_match(store="repo"):
     # cleanup
     ext.delete(delete_external_files=True)
 
+def test_path_match(store="repo"):
+    """ test file path matches and empty file"""
+    ext = schema.external[store]
+    stage_path = dj.config['stores'][store]['stage']
+
+    # create a mock file
+    relpath = 'path/to/films'
+    managed_file = Path(stage_path, relpath, 'vid.mov')
+    managed_file.parent.mkdir(parents=True, exist_ok=True)
+    open(str(managed_file), 'a').close()
+
+    # put the file
+    uuid = ext.upload_filepath(str(managed_file))
+
+    #remove
+    managed_file.unlink()
+    assert_false(managed_file.exists())
+
+    #check filepath
+    assert_equal(
+        (ext & {'hash': uuid}).fetch1('filepath'),
+        str(managed_file.relative_to(stage_path).as_posix()))
+    
+    # # Download the file and check its contents.
+    restored_path, checksum = ext.download_filepath(uuid)
+    assert_equal(restored_path, str(managed_file))
+    assert_equal(checksum, dj.hash.uuid_from_file(str(managed_file)))
+
+    # cleanup
+    ext.delete(delete_external_files=True)
+
+
 def test_filepath(store="repo"):
     """ test file management """
     ext = schema.external[store]
@@ -56,8 +88,13 @@ def test_filepath(store="repo"):
         f.write(data)
 
     # put the same file twice to ensure storing once
+<<<<<<< HEAD
     uuid1 = ext.upload_filepath(managed_file)
     uuid2 = ext.upload_filepath(managed_file)   # no duplication should arise if file is the same
+=======
+    uuid1 = ext.upload_filepath(str(managed_file))
+    uuid2 = ext.upload_filepath(str(managed_file))   # no duplication should arise if file is the same
+>>>>>>> master
     assert_equal(uuid1, uuid2)
 
     # remove to ensure downloading
@@ -67,8 +104,13 @@ def test_filepath(store="repo"):
     # Download the file and check its contents. Repeat causes no download from remote
     for _ in 1, 2:
         restored_path, checksum = ext.download_filepath(uuid1)
+<<<<<<< HEAD
         assert_equal(restored_path, managed_file)
         assert_equal(checksum, dj.hash.uuid_from_file(managed_file))
+=======
+        assert_equal(restored_path, str(managed_file))
+        assert_equal(checksum, dj.hash.uuid_from_file(str(managed_file)))
+>>>>>>> master
 
     # verify same data
     with managed_file.open('rb') as f:
@@ -92,8 +134,13 @@ def test_duplicate_upload(store="repo"):
     managed_file.parent.mkdir(parents=True, exist_ok=True)
     with managed_file.open('wb') as f:
         f.write(os.urandom(300))
+<<<<<<< HEAD
     ext.upload_filepath(managed_file)
     ext.upload_filepath(managed_file)  # this is fine because the file is the same
+=======
+    ext.upload_filepath(str(managed_file))
+    ext.upload_filepath(str(managed_file))  # this is fine because the file is the same
+>>>>>>> master
 
 
 def test_duplicate_upload_s3():
@@ -110,10 +157,17 @@ def test_duplicate_error(store="repo"):
     managed_file.parent.mkdir(parents=True, exist_ok=True)
     with managed_file.open('wb') as f:
         f.write(os.urandom(300))
+<<<<<<< HEAD
     ext.upload_filepath(managed_file)
     with managed_file.open('wb') as f:
         f.write(os.urandom(300))
     ext.upload_filepath(managed_file)  # this should raise exception because the file has changed
+=======
+    ext.upload_filepath(str(managed_file))
+    with managed_file.open('wb') as f:
+        f.write(os.urandom(300))
+    ext.upload_filepath(str(managed_file))  # this should raise exception because the file has changed
+>>>>>>> master
 
 
 def test_duplicate_error_s3():
@@ -135,7 +189,7 @@ def test_filepath_class(table=Filepath(), store="repo"):
     assert_equal(data, contents)
 
     # upload file into shared repo
-    table.insert1((1, managed_file))
+    table.insert1((1, str(managed_file)))
 
     # remove file locally
     managed_file.unlink()
@@ -143,7 +197,7 @@ def test_filepath_class(table=Filepath(), store="repo"):
 
     # fetch file from remote
     filepath = (table & {'fnum': 1}).fetch1('img')
-    assert_equal(filepath, managed_file)
+    assert_equal(filepath, str(managed_file))
 
     # verify original contents
     with managed_file.open('rb') as f:
@@ -187,7 +241,11 @@ def test_filepath_cleanup(table=Filepath(), store="repo"):
         managed_file.parent.mkdir(parents=True, exist_ok=True)
         with managed_file.open('wb') as f:
             f.write(contents)  # same in all files
+<<<<<<< HEAD
         table.insert1((i, managed_file))
+=======
+        table.insert1((i, str(managed_file)))
+>>>>>>> master
     assert_equal(len(table), n)
 
     ext = schema.external[store]
@@ -203,10 +261,49 @@ def test_filepath_cleanup(table=Filepath(), store="repo"):
     assert_true(0 < len(ext) <= n - m)
 
     dj.errors._switch_filepath_types(False)
+<<<<<<< HEAD
 
+=======
+>>>>>>> master
 
 
 def test_filepath_cleanup_s3():
     """test deletion of filepath entries from external table """
     store = "repo_s3"
     test_filepath_cleanup(FilepathS3(), store)
+
+
+def test_delete_without_files(store="repo"):
+    """test deletion of filepath entries from external table without removing files"""
+    dj.errors._switch_filepath_types(True)
+    # do not delete unused entries
+    schema.external[store].delete(delete_external_files=False)
+    dj.errors._switch_filepath_types(False)
+
+
+def test_return_string(table=Filepath(), store="repo"):
+    """ test returning string on fetch """
+    dj.errors._switch_filepath_types(True)
+    stage_path = dj.config['stores'][store]['stage']
+    # create a mock file
+    relative_path = 'this/is/a/test'
+    managed_file = Path(stage_path, relative_path, 'string.dat')
+    managed_file.parent.mkdir(parents=True, exist_ok=True)
+    data = os.urandom(3000)
+    with managed_file.open('wb') as f:
+        f.write(data)
+    with managed_file.open('rb') as f:
+        contents = f.read()
+    assert_equal(data, contents)
+
+    # upload file into shared repo
+    table.insert1((138, str(managed_file)))
+
+    # remove file locally
+    managed_file.unlink()
+    assert_false(managed_file.is_file())
+
+    # fetch file from remote
+    filepath = (table & {'fnum': 138}).fetch1('img')
+    assert_true(isinstance(filepath, str))
+    dj.errors._switch_filepath_types(False)

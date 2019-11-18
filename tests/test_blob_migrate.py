@@ -4,19 +4,20 @@ from nose.tools import assert_true, assert_false, assert_equal, \
 import datajoint as dj
 import os
 from pathlib import Path
+<<<<<<< HEAD
 import re
+=======
+>>>>>>> master
 from . import S3_CONN_INFO
 from . import CONN_INFO
+from datajoint.migrate import _migrate_dj011_blob
+dj.config['enable_python_native_blobs'] = True
 
 
 class TestBlobMigrate:
 
     @staticmethod
     def test_convert():
-
-        schema = dj.schema('djtest_blob_migrate')
-        query = schema.connection.query
-
         # Configure stores
         default_store = 'external'  # naming the unnamed external store
         dj.config['stores'] = {
@@ -39,6 +40,7 @@ class TestBlobMigrate:
                 location=str(Path(os.path.expanduser('~'),'temp','migrate-test')))
         }
         dj.config['cache'] = str(Path(os.path.expanduser('~'),'temp','dj-cache'))
+<<<<<<< HEAD
 
         LEGACY_HASH_SIZE = 43
 
@@ -173,13 +175,15 @@ class TestBlobMigrate:
 
     @staticmethod
     def test_query():
+=======
+>>>>>>> master
 
         dj.config['database.password'] = CONN_INFO['password']
         dj.config['database.user'] = CONN_INFO['user']
         dj.config['database.host'] = CONN_INFO['host']
-
         schema = dj.schema('djtest_blob_migrate')
 
+<<<<<<< HEAD
         # Configure stores
         default_store = 'external'  # naming the unnamed external store
         dj.config['stores'] = {
@@ -202,7 +206,30 @@ class TestBlobMigrate:
                 location=str(Path(os.path.expanduser('~'),'temp','migrate-test')))
         }
         dj.config['cache'] = str(Path(os.path.expanduser('~'),'temp','dj-cache'))
+=======
+        # Test if migration throws unexpected exceptions
+        _migrate_dj011_blob(schema, default_store)
+>>>>>>> master
 
+        # Test Fetch
         test_mod = dj.create_virtual_module('test_mod', 'djtest_blob_migrate')
+<<<<<<< HEAD
         r = test_mod.A.fetch('blob_share', order_by='id')
         assert_equal(r[1][1], 2)
+=======
+        r1 = test_mod.A.fetch('blob_share', order_by='id')
+        assert_equal(r1[1][1], 2)
+
+        # Test Insert
+        test_mod.A.insert1({
+            'id': 3,
+            'blob_external': [9, 8, 7, 6],
+            'blob_share': {'number': 5}})
+        r2 = (test_mod.A & 'id=3').fetch1()
+        assert_equal(r2['blob_share']['number'], 5)
+
+    @staticmethod
+    @raises(ValueError)
+    def test_type_check():
+        dj.migrate_dj011_external_blob_storage_to_dj012(10, 'store')
+>>>>>>> master

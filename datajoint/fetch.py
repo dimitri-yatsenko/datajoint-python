@@ -65,7 +65,11 @@ def _get(connection, attr, data, squeeze, download_path):
         if local_filepath.is_file():
             attachment_checksum = _uuid if attr.is_external else hash.uuid_from_buffer(data)
             if attachment_checksum == hash.uuid_from_file(local_filepath, init_string=attachment_name + '\0'):
+<<<<<<< HEAD
                 return adapt(local_filepath)  # checksum passed, no need to download again
+=======
+                return adapt(str(local_filepath))  # checksum passed, no need to download again
+>>>>>>> master
             # generate the next available alias filename
             for n in itertools.count():
                 f = local_filepath.parent / (local_filepath.stem + '_%04x' % n + local_filepath.suffix)
@@ -73,14 +77,22 @@ def _get(connection, attr, data, squeeze, download_path):
                     local_filepath = f
                     break
                 if attachment_checksum == hash.uuid_from_file(f, init_string=attachment_name + '\0'):
+<<<<<<< HEAD
                     return adapt(f)  # checksum passed, no need to download again
+=======
+                    return adapt(str(f))  # checksum passed, no need to download again
+>>>>>>> master
         # Save attachment
         if attr.is_external:
             extern.download_attachment(_uuid, attachment_name, local_filepath)
         else:
             # write from buffer
             safe_write(local_filepath, data.split(b"\0", 1)[1])
+<<<<<<< HEAD
         return adapt(local_filepath)  # download file from remote store
+=======
+        return adapt(str(local_filepath))  # download file from remote store
+>>>>>>> master
 
     return adapt(uuid.UUID(bytes=data) if attr.uuid else (
             blob.unpack(extern.get(uuid.UUID(bytes=data)) if attr.is_external else data, squeeze=squeeze) 
