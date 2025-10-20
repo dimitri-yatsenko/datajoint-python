@@ -177,9 +177,9 @@ class Table(QueryExpression):
     def parents(self, primary=None, as_objects=False, foreign_key_info=False):
         """
 
-        :param primary: if None, then all parents are returned. If True, then only foreign keys composed of
-            primary key attributes are considered.  If False, return foreign keys including at least one
-            secondary attribute.
+        :param primary: if None, then all parents are returned.
+            If True, then only foreign keys composed of primary key attributes are considered.
+            If False, return all foreign keys that have at least one secondary attribute.
         :param as_objects: if False, return table names. If True, return table objects.
         :param foreign_key_info: if True, each element in result also includes foreign key info.
         :return: list of parents as table names or table objects

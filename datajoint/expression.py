@@ -67,7 +67,7 @@ class QueryExpression:
 
     @property
     def support(self):
-        """A list of table names or subqueries to from the FROM clause"""
+        """A list of table names or subqueries to form the FROM clause"""
         assert self._support is not None
         return self._support
 

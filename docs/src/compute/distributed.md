@@ -37,38 +37,144 @@ example, to list the jobs currently being run:
 In [1]: schema.jobs
 Out[1]:
 *table_name    *key_hash      status       error_message  user           host           pid       connection_id  timestamp      key        error_stack
-+------------+ +------------+ +----------+ +------------+ +------------+ +------------+ +-------+ +------------+ +------------+ +--------+ +------------+
-__job_results  e4da3b7fbbce23 reserved                    datajoint@localhos localhost     15571     59             2017-09-04 14: <BLOB>     <BLOB>
-(2 tuples)
 ```
 
-The above output shows that a record for the `JobResults` table is currently reserved
-for computation, along with various related details of the reservation, such as the
-MySQL connection ID, client user and host, process ID on the remote system, timestamp,
-and the key for the record that the job is using for its computation.
-Since DataJoint table keys can be of varying types, the key is stored in a binary
-format to allow the table to store arbitrary types of record key data.
-The subsequent sections will discuss querying the jobs table for key data.
+## Enhanced Job Management (JobTable2)
 
-As mentioned above, jobs encountering errors during computation will leave their record
-reservations in place, and update the reservation record with details of the error.
+DataJoint now provides an enhanced job management system that addresses scalability
+limitations of the original jobs table. The new system creates individual job tables
+for each computed table, providing better performance and more detailed job tracking.
 
-For example, if a Python process is interrupted via the keyboard, a KeyboardError will
-be logged to the database as follows:
+### Key Improvements
+
+1. **Per-table job tables**: Each computed table gets its own job table with the same
+   primary key structure, eliminating the need for key hashing.
+
+2. **Enhanced status tracking**: Jobs can have statuses including `scheduled`, `reserved`,
+   `error`, `ignore`, and `success`.
+
+3. **Priority system**: Jobs can be assigned priorities for better scheduling control.
+
+4. **Performance metrics**: Job completion times and version information are tracked.
+
+5. **Automatic refresh**: Jobs tables can be automatically synchronized with key sources.
+
+### Using the Enhanced Job System
+
+To use the enhanced job system, simply call `populate()` with `reserve_jobs=True`:
 
 ```python
-In [2]: schema.jobs
-Out[2]:
-*table_name    *key_hash      status     error_message  user           host           pid       connection_id  timestamp      key        error_stack
-+------------+ +------------+ +--------+ +------------+ +------------+ +------------+ +-------+ +------------+ +------------+ +--------+ +------------+
-__job_results  3416a75f4cea91 error      KeyboardInterr datajoint@localhos localhost     15571     59             2017-09-04 14: <BLOB>     <BLOB>
-(1 tuples)
+# This will automatically use the new job table design
+MyComputedTable.populate(reserve_jobs=True)
 ```
 
-By leaving the job reservation record in place, the error can be inspected, and if
-necessary the corresponding `dj.Computed` update logic can be corrected.
-From there the jobs entry can be cleared, and the computation can then be resumed.
-In the meantime, the presence of the job reservation will prevent this particular
+### Accessing Job Tables
+
+Each AutoPopulate table now has a `jobs` property that provides access to its job table:
+
+```python
+# Access the job table for a specific computed table
+jobs_table = MyComputedTable.jobs
+
+# Query job status
+scheduled_jobs = jobs_table & 'status="scheduled"'
+successful_jobs = jobs_table & 'status="success"'
+failed_jobs = jobs_table & 'status="error"'
+
+# Get job statistics
+total_jobs = len(jobs_table)
+completed_jobs = len(successful_jobs)
+failed_jobs = len(failed_jobs)
+```
+
+### Job Table Schema
+
+The new job tables have the following structure:
+
+```sql
+-- Primary key matches the computed table
+PRIMARY_KEY_ATTR1 :varchar(255)
+PRIMARY_KEY_ATTR2 :varchar(255)
+...
+---
+status :enum('scheduled','reserved','error','ignore','success')
+priority=3 :tinyint  # Lower values = higher priority
+error_message="" :varchar(2047)
+error_stack=null :mediumblob
+run_duration=null :float  # Duration in seconds
+run_version=null :json  # Version information
+user="" :varchar(255)
+host="" :varchar(255)
+pid=0 :int unsigned
+connection_id=0 :bigint unsigned
+timestamp=CURRENT_TIMESTAMP :timestamp
+```
+
+### Job Management Operations
+
+```python
+# Refresh jobs table with current key source
+MyComputedTable.jobs.refresh(MyComputedTable.key_source)
+
+# Get scheduled jobs with custom ordering
+jobs = MyComputedTable.jobs.get_scheduled_jobs(
+    limit=10, 
+    order_by=['priority', 'timestamp']
+)
+
+# Set job priority
+MyComputedTable.jobs.set_priority(job_key, priority=1)
+
+# Manually mark job as ignored
+MyComputedTable.jobs.ignore(job_key)
+```
+
+### Populate Options
+
+The `populate()` method now supports additional options for job management:
+
+```python
+MyComputedTable.populate(
+    reserve_jobs=True,      # Enable job reservation
+    refresh_jobs=True,      # Refresh jobs table before populating (default)
+    order="original",       # Job processing order
+    limit=100,             # Limit number of jobs to process
+)
+```
+
+### Backward Compatibility
+
+The new job system is fully backward compatible. Existing code using `schema.jobs` will
+continue to work, and the new system will automatically be used when `reserve_jobs=True`
+is specified.
+
+## Legacy Job Management
+
+The original schema-wide jobs table is still available for backward compatibility:
+
+```python
+# Access the legacy jobs table
+legacy_jobs = schema.jobs
+
+# Query jobs by table name
+table_jobs = legacy_jobs & {'table_name': 'MyComputedTable'}
+
+# Query by status
+error_jobs = legacy_jobs & 'status="error"'
+```
+
+As part of DataJoint, the jobs table can be queried using native DataJoint syntax. For
+example, to list the jobs currently being run:
+
+```python
+In [1]: schema.jobs
+Out[1]:
+*table_name    *key_hash      status       error_message  user           host           pid       connection_id  timestamp      key        error_stack
+```
+
+### Job Status Management
+
+When a job fails, it remains in the jobs table with status "error" to prevent the
 record from being processed during subsequent auto-population calls.
 Inspecting the job record for failure details can proceed much like any other DataJoint
 query.
@@ -120,47 +226,19 @@ In [5]: schema.jobs & jk
 Out[5]:
 *table_name    *key_hash      status     key        error_message  error_stac user           host      pid        connection_id  timestamp
 +------------+ +------------+ +--------+ +--------+ +------------+ +--------+ +------------+ +-------+ +--------+ +------------+ +------------+
-__job_results  c81e728d9d4c2f error      =BLOB=     KeyboardInterr =BLOB=     datajoint@localhost  localhost     15571     59             2017-09-04 14:
-(Total: 1)
-
-In [6]: (schema.jobs & jk).delete()
-
-In [7]: schema.jobs & jk
-Out[7]:
-*table_name    *key_hash    status     key        error_message  error_stac user     host     pid     connection_id  timestamp
-+------------+ +----------+ +--------+ +--------+ +------------+ +--------+ +------+ +------+ +-----+ +------------+ +-----------+
-
-(Total: 0)
 ```
 
-## Managing connections
-
-The DataJoint method `dj.kill` allows for viewing and termination of database
-connections.
-Restrictive conditions can be used to identify specific connections.
-Restrictions are specified as strings and can involve any of the attributes of
-`information_schema.processlist`: `ID`, `USER`, `HOST`, `DB`, `COMMAND`, `TIME`,
-`STATE`, and `INFO`.
-
-Examples:
-
-  `dj.kill('HOST LIKE "%compute%"')` lists only connections from hosts containing "compute".
-  `dj.kill('TIME > 600')` lists only connections older than 10 minutes.
-
-A list of connections meeting the restriction conditions (if present) are presented to
-the user, along with the option to kill processes. By default, output is ordered by
-ascending connection ID. To change the output order of dj.kill(), an additional
-order_by argument can be provided.
-
-For example, to sort the output by hostname in descending order:
+The job can then be removed from the jobs table to allow it to be processed again:
 
 ```python
-In [3]: dj.kill(None, None, 'host desc')
-Out[3]:
-     ID USER         HOST          STATE         TIME    INFO
-+--+ +----------+ +-----------+ +-----------+ +-----+
-     33 chris        localhost:54840                 1261  None
-     17 chris        localhost:54587                 3246  None
-     4 event_scheduler localhost    Waiting on empty queue  187180  None
-process to kill or "q" to quit > q
+In [6]: (schema.jobs & jk).delete()
+```
+
+And the jobs table can be queried again to confirm the job has been removed:
+
+```python
+In [7]: schema.jobs & jk
+Out[7]:
+*table_name    *key_hash      status     key        error_message  error_stac user           host      pid        connection_id  timestamp
++------------+ +------------+ +--------+ +--------+ +------------+ +--------+ +------------+ +-------+ +--------+ +------------+ +------------+
 ```
