@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from .errors import DataJointError, LostConnectionError
 from .expression import AndList, QueryExpression
-from .jobs import JobTable2
+from .jobs import JobTable
 
 # noinspection PyExceptionInherit,PyCallingNonCallable
 
@@ -276,8 +276,7 @@ class AutoPopulate:
             "error_list": the error list that is filled if `suppress_errors` is True
         """
         if self.connection.in_transaction:
-            raise DataJointError(
-                "Populate cannot be called during a transaction.")
+            raise DataJointError("Populate cannot be called during a transaction.")
 
         valid_order = ["original", "reverse", "random"]
         if order not in valid_order:
@@ -349,8 +348,7 @@ class AutoPopulate:
                 del self.connection._conn.ctx  # SSLContext is not pickleable
                 with (
                     mp.Pool(
-                        processes, _initialize_populate, (
-                            self, jobs, populate_kwargs)
+                        processes, _initialize_populate, (self, jobs, populate_kwargs)
                     ) as pool,
                     (
                         tqdm(desc="Processes: ", total=nkeys)
@@ -396,8 +394,7 @@ class AutoPopulate:
             True if successfully invoke one `make()` call, otherwise False
         """
         # use the legacy `_make_tuples` callback.
-        make = self._make_tuples if hasattr(
-            self, "_make_tuples") else self.make
+        make = self._make_tuples if hasattr(self, "_make_tuples") else self.make
 
         if reserve_jobs and not self.jobs.reserve(key):
             # unable to reserve the key for the job
@@ -467,8 +464,7 @@ class AutoPopulate:
                 return key, error if return_exception_objects else error_message
         else:
             self.connection.commit_transaction()
-            logger.debug(
-                f"Success making {key} -> {self.target.full_table_name}")
+            logger.debug(f"Success making {key} -> {self.target.full_table_name}")
             if jobs is not None:
                 run_duration = time.time() - start_time
                 if jobs is not None:

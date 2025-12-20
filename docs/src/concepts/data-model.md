@@ -36,23 +36,22 @@ objects in memory with properties and methods for transformations of such data.
 ## Relational data model
 
 The **relational model** is a way of thinking about data as sets and operations on sets.
-Formalized almost a half-century ago ([Codd,
-1969](https://dl.acm.org/citation.cfm?doid=362384.362685)). The relational data model is
-one of the most powerful and precise ways to store and manage structured data. At its
-core, this model organizes all data into tables--representing mathematical
-relations---where each table consists of rows (representing mathematical tuples) and
-columns (often called attributes).
+Formalized half a century ago by Edgar F. Codd (@10.1145/362384.36268), the relational data model is
+one of the most powerful and precise ways to define and manage structured data. At its
+core, this model organizes all data into tables---representing mathematical
+relations---where each table consists of rows (mathematical tuples) and
+columns (attributes).
 
 ### Core principles of the relational data model
 
 **Data representation:**
-  Data are represented and manipulated in the form of relations.
+  Data are represented and manipulated in the form of relations (mathematical sets).
   A relation is a set (i.e. an unordered collection) of entities of values for each of
   the respective named attributes of the relation.
   Base relations represent stored data while derived relations are formed from base
-  relations through query expressions.
+  relations through relational operators.
   A collection of base relations with their attributes, domain constraints, uniqueness
-  constraints, and referential constraints is called a schema.
+  constraints, and referential constraints is called a [schema](../design/schema.md).
 
 **Domain constraints:**
   Each attribute (column) in a table is associated with a specific attribute domain (or

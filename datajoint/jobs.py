@@ -19,11 +19,7 @@ class Job(Table):
     def __init__(self, computed_table: Table):
         """
         Initialize a job table for a specific computed table.
-
-        :param computed_table: Database connection
-        :param database: Database name
-        :param table_name: Name of the computed table
-        :param primary_key_attrs: List of primary key attribute names
+        :param computed_table: AutoPopulate instance
         """
         self.database = computed_table.database
         self._connection = computed_table.connection
@@ -37,30 +33,29 @@ class Job(Table):
                 conn=computed_table.connection,
                 database=computed_table.database,
                 table_name=self.table_name,
-                context=None
+                context=None,
             )
         )
 
         self._definition = f"# job table for {self.computed_table.full_table_name}\n"
 
-        # add references to parent tables to the definition
+        # add primary foreign key references to parent tables to the definition
         parents = computed_table.parents(
-            as_objects=False, primary_key=True, foreign_key_info=True)
+            as_objects=False, primary_key=True, foreign_key_info=True
+        )
         for parent_name, fk_props in parents:
             if not fk_props["aliased"]:
                 # simple foreign key
                 self._definition += f"->{parent_name}\n"
             else:
                 # projected foreign key
-                self._definition += (
-                    "->{parent_name}.proj({proj_list})\n".format(
-                        parent_name=parent_name,
-                        proj_list=",".join(
-                            '{}="{}"'.format(attr, ref)
-                            for attr, ref in fk_props["attr_map"].items()
-                            if ref != attr
-                        )
-                    )
+                self._definition += "->{parent_name}.proj({proj_list})\n".format(
+                    parent_name=parent_name,
+                    proj_list=",".join(
+                        '{}="{}"'.format(attr, ref)
+                        for attr, ref in fk_props["attr_map"].items()
+                        if ref != attr
+                    ),
                 )
         self._definition += """
         ---
@@ -105,11 +100,11 @@ class Job(Table):
         :param key_source: QueryExpression that defines available jobs
         """
         # Get current jobs that should be preserved (reserved, error, ignore)
-        preserve_statuses = ('reserved', 'error', 'ignore')
-        existing_jobs = (self & f'status in {preserve_statuses}').fetch('KEY')
+        preserve_statuses = ("reserved", "error", "ignore")
+        existing_jobs = (self & f"status in {preserve_statuses}").fetch("KEY")
 
         # Get all keys from key_source
-        available_keys = key_source.fetch('KEY')
+        available_keys = key_source.fetch("KEY")
 
         # Remove jobs that are no longer in key_source
         for job_key in existing_jobs:
@@ -117,10 +112,10 @@ class Job(Table):
                 (self & job_key).delete_quick()
 
         # Add new jobs that aren't already in the table
-        existing_all = self.fetch('KEY')
+        existing_all = self.fetch("KEY")
         for key in available_keys:
             if key not in existing_all:
-                self.insert1(dict(key, status='scheduled', priority=3))
+                self.insert1(dict(**key, status="scheduled", priority=3))
 
     def reserve(self, key):
         """
@@ -130,7 +125,7 @@ class Job(Table):
         :return: True if reserved job successfully. False = the job is already taken
         """
         job = dict(
-            key,
+            **key,
             status="reserved",
             host=platform.node(),
             pid=os.getpid(),
@@ -151,7 +146,7 @@ class Job(Table):
         :return: True if ignore job successfully. False = the job is already taken
         """
         job = dict(
-            key,
+            **key,
             status="ignore",
             host=platform.node(),
             pid=os.getpid(),
@@ -173,7 +168,7 @@ class Job(Table):
         :param run_version: version information (e.g., git commit hash)
         """
         job = dict(
-            key,
+            **key,
             status="success",
             run_duration=run_duration,
             run_version=json.dumps(run_version) if run_version else None,
@@ -194,13 +189,12 @@ class Job(Table):
         """
         if len(error_message) > ERROR_MESSAGE_LENGTH:
             error_message = (
-                error_message[: ERROR_MESSAGE_LENGTH -
-                              len(TRUNCATION_APPENDIX)]
+                error_message[: ERROR_MESSAGE_LENGTH - len(TRUNCATION_APPENDIX)]
                 + TRUNCATION_APPENDIX
             )
 
         job = dict(
-            key,
+            **key,
             status="error",
             error_message=error_message,
             error_stack=error_stack,
@@ -227,12 +221,12 @@ class Job(Table):
             query = query.fetch(order_by=order_by)
         else:
             # Default ordering: priority (ascending), then timestamp (ascending)
-            query = query.fetch(order_by=['priority', 'timestamp'])
+            query = query.fetch(order_by=["priority", "timestamp"])
 
         if limit:
             query = query[:limit]
 
-        return query.fetch('KEY')
+        return query.fetch("KEY")
 
     def set_priority(self, key, priority):
         """
@@ -241,4 +235,4 @@ class Job(Table):
         :param key: the dict of the job's primary key
         :param priority: priority value (lower = higher priority)
         """
-        self.update1(dict(key, priority=priority))
+        self.update1(dict(**key, priority=priority))

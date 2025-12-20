@@ -2,12 +2,9 @@
 
 ## Job reservations
 
-Running `populate` on the same table on multiple computers will causes them to attempt
+Running `populate` on the same table on multiple computers will cause them to attempt
 to compute the same data all at once.
 This will not corrupt the data since DataJoint will reject any duplication.
-One solution could be to cause the different computing nodes to populate the tables in
-random order.
-This would reduce some collisions but not completely prevent them.
 
 To allow efficient distributed computing, DataJoint provides a built-in job reservation
 process.
