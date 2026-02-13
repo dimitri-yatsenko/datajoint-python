@@ -28,53 +28,22 @@ query_log_max_length = 300
 cache_key = "query_cache"  # the key to lookup the query_cache folder in dj.config
 
 
-class ConnectionConfig:
+class ConnectionSettings:
     """
-    Connection-scoped configuration (read/write).
+    Connection-scoped settings accessor.
 
-    Provides access to settings that can vary per connection. Behavior depends on
-    how the connection was created:
+    Provides read/write access to settings that can vary per connection.
+    Defaults are read from the ``Config`` class - no duplication.
 
-    - **New API** (``Connection.from_config()``): Uses explicit values or defaults.
-      Never accesses global config. Works identically with ``thread_safe`` on or off.
+    Behavior depends on how the connection was created:
+
+    - **New API** (``Connection.from_config()``): Uses explicit values or
+      defaults from ``Config`` class. Never accesses global config.
     - **Legacy API** (``dj.conn()``): Forwards unset values to global ``dj.config``
       for backward compatibility.
 
-    Parameters
-    ----------
-    **explicit_values : Any
-        Explicitly provided configuration values. These take precedence over
-        global config and defaults.
-
-    Attributes
-    ----------
-    safemode : bool
-        Require confirmation for destructive operations.
-    database_prefix : str
-        Prefix for schema names.
-    stores : dict
-        Blob storage configuration.
-    cache : Path or None
-        Local cache directory.
-    query_cache : Path or None
-        Query cache directory.
-    reconnect : bool
-        Auto-reconnect on lost connection.
-    display_limit : int
-        Max rows to display.
-    display_width : int
-        Column width for display.
-    show_tuple_count : bool
-        Show tuple count in repr.
-    loglevel : str
-        Logging level.
-    filepath_checksum_size_limit : int or None
-        Max file size for checksum.
-
     Examples
     --------
-    Access settings through a connection:
-
     >>> conn = dj.Connection.from_config(host="localhost", user="root", password="pw")
     >>> conn.config.safemode
     True
@@ -82,23 +51,8 @@ class ConnectionConfig:
     >>> conn.config.display_limit = 25
     """
 
-    _DEFAULTS: dict[str, Any] = {
-        "safemode": True,
-        "database_prefix": "",
-        "stores": {},
-        "cache": None,
-        "query_cache": None,
-        "reconnect": True,
-        "create_tables": True,
-        "display_limit": 12,
-        "display_width": 14,
-        "show_tuple_count": True,
-        "loglevel": "INFO",
-        "filepath_checksum_size_limit": None,
-    }
-
-    # Mapping from ConnectionConfig names to global config paths
-    _GLOBAL_CONFIG_MAP: dict[str, str] = {
+    # Map attribute names to global config paths (also defines valid settings)
+    _CONFIG_PATHS: dict[str, str] = {
         "safemode": "safemode",
         "database_prefix": "database.database_prefix",
         "stores": "stores",
@@ -113,12 +67,9 @@ class ConnectionConfig:
         "filepath_checksum_size_limit": "filepath_checksum_size_limit",
     }
 
-    def __init__(self, **explicit_values: Any) -> None:
-        object.__setattr__(self, "_values", {})  # Mutable storage for this connection
-        # If True, forward unset values to global config (legacy API behavior)
-        # If False, use defaults only (new API behavior)
-        object.__setattr__(self, "_use_global_fallback", explicit_values.pop("_use_global_fallback", False))
-        self._values.update(explicit_values)
+    def __init__(self, values: dict[str, Any] | None = None, use_global_fallback: bool = False) -> None:
+        object.__setattr__(self, "_values", values.copy() if values else {})
+        object.__setattr__(self, "_use_global_fallback", use_global_fallback)
 
     def __getattr__(self, name: str) -> Any:
         if name.startswith("_"):
@@ -130,26 +81,58 @@ class ConnectionConfig:
 
         # Legacy API: forward to global config for backward compatibility
         if self._use_global_fallback:
-            global_path = self._GLOBAL_CONFIG_MAP.get(name)
-            if global_path:
-                return config[global_path]
+            path = self._CONFIG_PATHS.get(name)
+            if path:
+                return config[path]
 
-        # New API: use defaults only (no global config access)
-        return self._DEFAULTS.get(name)
+        # New API: use defaults from Config class (no duplication)
+        return self._get_default(name)
 
     def __setattr__(self, name: str, value: Any) -> None:
         if name.startswith("_"):
             return object.__setattr__(self, name, value)
-
-        # Store in connection-local values
         self._values[name] = value
 
     def __repr__(self) -> str:
-        items = []
-        for name in self._DEFAULTS:
-            value = getattr(self, name)
-            items.append(f"{name}={value!r}")
-        return f"ConnectionConfig({', '.join(items)})"
+        items = [f"{name}={getattr(self, name)!r}" for name in self._CONFIG_PATHS]
+        return f"ConnectionSettings({', '.join(items)})"
+
+    @classmethod
+    def _get_default(cls, name: str) -> Any:
+        """Get default value from Config class field definitions."""
+        from pydantic_core import PydanticUndefined
+
+        from .settings import Config, DatabaseSettings, DisplaySettings
+
+        path = cls._CONFIG_PATHS.get(name)
+        if not path:
+            raise AttributeError(f"Unknown connection setting: {name}")
+
+        parts = path.split(".")
+        if len(parts) == 1:
+            # Top-level field like 'safemode', 'stores'
+            field = Config.model_fields.get(parts[0])
+            if field is None:
+                return None
+            default = field.default
+            # Handle default_factory (default is PydanticUndefined when factory is used)
+            if (default is None or default is PydanticUndefined) and field.default_factory is not None:
+                return field.default_factory()
+            return default
+        else:
+            # Nested field like 'display.limit' or 'database.reconnect'
+            group_name, field_name = parts
+            group_field = Config.model_fields.get(group_name)
+            if group_field is None:
+                return None
+            # Get the nested model class
+            group_cls = {"database": DatabaseSettings, "display": DisplaySettings}.get(group_name)
+            if group_cls is None:
+                return None
+            nested_field = group_cls.model_fields.get(field_name)
+            if nested_field is None:
+                return None
+            return nested_field.default
 
     def get_store_spec(self, store_name: str) -> dict:
         """
@@ -176,7 +159,7 @@ class ConnectionConfig:
         return stores[store_name]
 
     @contextmanager
-    def override(self, **kwargs: Any) -> Iterator["ConnectionConfig"]:
+    def override(self, **kwargs: Any) -> Iterator["ConnectionSettings"]:
         """
         Temporarily override configuration values for this connection.
 
@@ -187,7 +170,7 @@ class ConnectionConfig:
 
         Yields
         ------
-        ConnectionConfig
+        ConnectionSettings
             The config instance with overridden values.
 
         Examples
@@ -204,7 +187,7 @@ class ConnectionConfig:
         for key, value in kwargs.items():
             if key in self._values:
                 backup[key] = deepcopy(self._values[key])
-            elif key in self._DEFAULTS:
+            elif key in self._CONFIG_PATHS:
                 backup[key] = None  # Marker for "was not set"
 
         try:
@@ -368,7 +351,7 @@ class Connection:
 
     Attributes
     ----------
-    config : ConnectionConfig
+    config : ConnectionSettings
         Connection-scoped configuration settings.
     schemas : dict
         Registered schema objects.
@@ -385,7 +368,7 @@ class Connection:
         use_tls: bool | dict | None = None,
         backend: str | None = None,
         *,
-        _config: ConnectionConfig | None = None,
+        _config: ConnectionSettings | None = None,
     ) -> None:
         if ":" in host:
             # the port in the hostname overrides the port argument
@@ -434,7 +417,7 @@ class Connection:
 
         # Connection-scoped configuration
         # Legacy API (dj.conn()) uses global fallback for backward compatibility
-        self.config = _config if _config is not None else ConnectionConfig(_use_global_fallback=True)
+        self.config = _config if _config is not None else ConnectionSettings(use_global_fallback=True)
 
     @classmethod
     def from_config(
@@ -556,7 +539,7 @@ class Connection:
         effective_backend = "mysql"
         effective_use_tls = None
 
-        # Connection-scoped settings (will be passed to ConnectionConfig)
+        # Connection-scoped settings (will be passed to ConnectionSettings)
         config_kwargs: dict[str, Any] = {}
 
         # Override with cfg dict if provided
@@ -651,11 +634,8 @@ class Connection:
                 "Database password is required. " "Provide password= argument or include 'password' in config dict."
             )
 
-        # Create ConnectionConfig - new API never falls back to global config
-        conn_config = ConnectionConfig(
-            _use_global_fallback=False,
-            **config_kwargs,
-        )
+        # Create ConnectionSettings - new API never falls back to global config
+        conn_config = ConnectionSettings(values=config_kwargs, use_global_fallback=False)
 
         # Create connection with explicit backend parameter and config
         connection = cls(

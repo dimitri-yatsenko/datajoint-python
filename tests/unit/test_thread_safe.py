@@ -3,7 +3,7 @@
 import pytest
 
 import datajoint as dj
-from datajoint.connection import ConnectionConfig
+from datajoint.connection import ConnectionSettings
 from datajoint.errors import ThreadSafetyError
 
 
@@ -250,12 +250,12 @@ class TestThreadSafetyErrorExport:
         assert issubclass(ThreadSafetyError, dj.DataJointError)
 
 
-class TestConnectionConfig:
-    """Tests for ConnectionConfig class."""
+class TestConnectionSettings:
+    """Tests for ConnectionSettings class."""
 
     def test_defaults(self):
-        """ConnectionConfig has correct defaults."""
-        cfg = ConnectionConfig()
+        """ConnectionSettings has correct defaults."""
+        cfg = ConnectionSettings()
         assert cfg.safemode is True
         assert cfg.database_prefix == ""
         assert cfg.stores == {}
@@ -266,14 +266,14 @@ class TestConnectionConfig:
 
     def test_explicit_values(self):
         """Explicit values override defaults."""
-        cfg = ConnectionConfig(safemode=False, display_limit=25, stores={"raw": {}})
+        cfg = ConnectionSettings(values={"safemode": False, "display_limit": 25, "stores": {"raw": {}}})
         assert cfg.safemode is False
         assert cfg.display_limit == 25
         assert cfg.stores == {"raw": {}}
 
     def test_read_write(self):
-        """ConnectionConfig supports read/write access."""
-        cfg = ConnectionConfig()
+        """ConnectionSettings supports read/write access."""
+        cfg = ConnectionSettings()
         cfg.safemode = False
         cfg.display_limit = 50
         assert cfg.safemode is False
@@ -286,8 +286,8 @@ class TestConnectionConfig:
         object.__setattr__(dj.config, "safemode", False)
 
         try:
-            # Legacy API uses _use_global_fallback=True
-            cfg = ConnectionConfig(_use_global_fallback=True)
+            # Legacy API uses use_global_fallback=True
+            cfg = ConnectionSettings(use_global_fallback=True)
             # Should forward to global config
             assert cfg.safemode is False
         finally:
@@ -295,8 +295,8 @@ class TestConnectionConfig:
 
     def test_uses_defaults_with_new_api(self):
         """Unset values use defaults with new API (from_config())."""
-        # New API uses _use_global_fallback=False
-        cfg = ConnectionConfig(_use_global_fallback=False)
+        # New API uses use_global_fallback=False
+        cfg = ConnectionSettings(use_global_fallback=False)
         # Should use default, not global config
         assert cfg.safemode is True  # default
         assert cfg.display_limit == 12  # default
@@ -309,13 +309,13 @@ class TestConnectionConfig:
 
         try:
             # New API with thread_safe=False
-            cfg1 = ConnectionConfig(_use_global_fallback=False)
+            cfg1 = ConnectionSettings(use_global_fallback=False)
 
             # Enable thread_safe mode
             enable_thread_safe()
 
             # New API with thread_safe=True
-            cfg2 = ConnectionConfig(_use_global_fallback=False)
+            cfg2 = ConnectionSettings(use_global_fallback=False)
 
             # Both should use defaults, not global config
             assert cfg1.safemode is True  # default, not global (False)
@@ -330,34 +330,34 @@ class TestConnectionConfig:
         object.__setattr__(dj.config, "safemode", True)
 
         try:
-            cfg = ConnectionConfig(_use_global_fallback=True, safemode=False)
+            cfg = ConnectionSettings(values={"safemode": False}, use_global_fallback=True)
             assert cfg.safemode is False  # explicit value
         finally:
             object.__setattr__(dj.config, "safemode", original_safemode)
 
     def test_get_store_spec(self):
         """get_store_spec returns store configuration."""
-        cfg = ConnectionConfig(stores={"raw": {"protocol": "file", "location": "/data"}})
+        cfg = ConnectionSettings(values={"stores": {"raw": {"protocol": "file", "location": "/data"}}})
         spec = cfg.get_store_spec("raw")
         assert spec["protocol"] == "file"
         assert spec["location"] == "/data"
 
     def test_get_store_spec_not_found(self):
         """get_store_spec raises error for unknown store."""
-        cfg = ConnectionConfig(stores={})
+        cfg = ConnectionSettings(values={"stores": {}})
         with pytest.raises(dj.DataJointError, match="not configured"):
             cfg.get_store_spec("unknown")
 
     def test_repr(self):
-        """ConnectionConfig has informative repr."""
-        cfg = ConnectionConfig(safemode=False)
+        """ConnectionSettings has informative repr."""
+        cfg = ConnectionSettings(values={"safemode": False})
         r = repr(cfg)
-        assert "ConnectionConfig" in r
+        assert "ConnectionSettings" in r
         assert "safemode=False" in r
 
     def test_override_context_manager(self):
         """override temporarily changes values and restores them."""
-        cfg = ConnectionConfig(safemode=True, display_limit=10)
+        cfg = ConnectionSettings(values={"safemode": True, "display_limit": 10})
 
         with cfg.override(safemode=False, display_limit=50):
             assert cfg.safemode is False
@@ -368,7 +368,7 @@ class TestConnectionConfig:
 
     def test_override_restores_on_exception(self):
         """override restores values even when exception is raised."""
-        cfg = ConnectionConfig(safemode=True)
+        cfg = ConnectionSettings(values={"safemode": True})
 
         try:
             with cfg.override(safemode=False):
@@ -381,7 +381,7 @@ class TestConnectionConfig:
 
     def test_override_with_defaults(self):
         """override works when value was not explicitly set."""
-        cfg = ConnectionConfig()  # Uses defaults
+        cfg = ConnectionSettings()  # Uses defaults
         assert cfg.safemode is True  # default
 
         with cfg.override(safemode=False):
@@ -392,11 +392,11 @@ class TestConnectionConfig:
         assert "safemode" not in cfg._values
 
 
-class TestConnectionConfigAttribute:
+class TestConnectionSettingsAttribute:
     """Tests for Connection.config attribute."""
 
     def test_from_config_creates_connection_config(self):
-        """from_config creates ConnectionConfig on connection."""
+        """from_config creates ConnectionSettings on connection."""
         from unittest.mock import patch
 
         captured_config = {}
@@ -408,7 +408,7 @@ class TestConnectionConfigAttribute:
             dj.Connection.from_config(host="h", user="u", password="p", safemode=False)
 
         assert captured_config["config"] is not None
-        assert isinstance(captured_config["config"], ConnectionConfig)
+        assert isinstance(captured_config["config"], ConnectionSettings)
         assert captured_config["config"].safemode is False
 
     def test_from_config_passes_all_settings(self):
@@ -503,7 +503,7 @@ class TestSchemaThreadSafe:
 
         # Create a mock connection with new API config (no global fallback)
         mock_conn = MagicMock(spec=dj.Connection)
-        mock_conn.config = ConnectionConfig(_use_global_fallback=False)
+        mock_conn.config = ConnectionSettings(use_global_fallback=False)
 
         # Mock the schema activation to avoid database operations
         with patch.object(dj.Schema, "activate"):
