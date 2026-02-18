@@ -163,13 +163,19 @@ class Connection:
         password: str,
         port: int | None = None,
         use_tls: bool | dict | None = None,
+        *,
+        backend: str | None = None,
+        config_override: "Config | None" = None,
     ) -> None:
+        # Config reference - use override if provided, else global config
+        self._config = config_override if config_override is not None else config
+
         if ":" in host:
             # the port in the hostname overrides the port argument
             host, port = host.split(":")
             port = int(port)
         elif port is None:
-            port = config["database.port"]
+            port = self._config["database.port"]
         self.conn_info = dict(host=host, port=port, user=user, passwd=password)
         if use_tls is not False:
             # use_tls can be: None (auto-detect), True (enable), False (disable), or dict (custom config)
@@ -186,11 +192,9 @@ class Connection:
         self._query_cache = None
         self._is_closed = True  # Mark as closed until connect() succeeds
 
-        # Config reference - defaults to global config, but Instance sets its own
-        self._config = config
-
-        # Select adapter based on configured backend
-        backend = self._config["database.backend"]
+        # Select adapter: explicit backend > config backend
+        if backend is None:
+            backend = self._config["database.backend"]
         self.adapter = get_adapter(backend)
 
         self.connect()

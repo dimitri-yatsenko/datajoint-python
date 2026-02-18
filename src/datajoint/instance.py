@@ -104,11 +104,16 @@ class Instance:
         if port is None:
             port = self.config.database.port
 
-        # Create connection
-        self.connection = Connection(host, user, password, port, use_tls)
-
-        # Attach config to connection so tables can access it
-        self.connection._config = self.config
+        # Create connection with this instance's config and backend
+        self.connection = Connection(
+            host,
+            user,
+            password,
+            port,
+            use_tls,
+            backend=self.config.database.backend,
+            config_override=self.config,
+        )
 
     def Schema(
         self,
